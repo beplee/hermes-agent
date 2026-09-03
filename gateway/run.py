@@ -7677,17 +7677,6 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
         self._restart_detached = False
         self._restart_via_service = False
         self._detached_restart_helper_started = False
-
-    def _hosted_rooms_enabled(self) -> bool:
-        """Whether the Group Chat (hosted rooms) worker should be started.
-
-        Defaults to True. Can be disabled with ``gateway.hosted_rooms_enabled=false``
-        in config.yaml or ``HERMES_GATEWAY_HOSTED_ROOMS_ENABLED=false`` in env.
-        """
-        try:
-            return bool(cfg_get(self.config.gateway, "hosted_rooms_enabled", default=True))
-        except Exception:
-            return True  # fail-open: if config is malformed, keep the worker
         self._restart_command_source: Optional[SessionSource] = None
         # Monotonic-ish wall clock of when this GatewayRunner was constructed.
         # Used by the /restart redelivery guard to bound the window in which a
@@ -8008,6 +7997,18 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
         self._scale_to_zero_cooldown_until: float = 0.0
         # One-shot: log the "platform owns the suspend" notice once, not per tick.
         self._scale_to_zero_no_suspend_logged: bool = False
+
+
+    def _hosted_rooms_enabled(self) -> bool:
+        """Whether the Group Chat (hosted rooms) worker should be started.
+
+        Defaults to True. Can be disabled with ``gateway.hosted_rooms_enabled=false``
+        in config.yaml or ``HERMES_GATEWAY_HOSTED_ROOMS_ENABLED=false`` in env.
+        """
+        try:
+            return bool(cfg_get(self.config.gateway, "hosted_rooms_enabled", default=True))
+        except Exception:
+            return True  # fail-open: if config is malformed, keep the worker
 
 
     def _open_session_db_for_active_scope(self, raise_on_error: bool = False) -> Any:
