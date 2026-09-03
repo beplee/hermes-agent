@@ -953,6 +953,15 @@ class GatewayConfig:
     # tooling and downgrade safety; set gateway.write_sessions_json: false in
     # config.yaml to stop producing the file.
     write_sessions_json: bool = True
+
+    # Whether the gateway starts the Group Chat (hosted rooms) worker.
+    # The worker operates on the install-wide shared state.db and runs in
+    # every profile gateway by default. On multi-profile installs, a fleet
+    # restart (e.g. `hermes update`) fires all workers back-to-back on the
+    # same shared state.db, which has corrupted the store in the field
+    # (#102120). Set to false to disable the worker entirely — the gateway
+    # will still serve real messages, just without Group Chat rooms.
+    hosted_rooms_enabled: bool = True
     
     # Delivery settings
     always_log_local: bool = True  # Always save cron outputs to local files
@@ -1327,8 +1336,9 @@ class GatewayConfig:
             reset_triggers=data.get("reset_triggers", ["/new", "/reset"]),
             quick_commands=quick_commands,
             sessions_dir=sessions_dir,
-            write_sessions_json=_coerce_bool(data.get("write_sessions_json"), True),
-            always_log_local=_coerce_bool(data.get("always_log_local"), True),
+write_sessions_json=_coerce_bool(data.get("write_sessions_json"), True),
+        hosted_rooms_enabled=_coerce_bool(data.get("hosted_rooms_enabled"), True),
+        always_log_local=_coerce_bool(data.get("always_log_local"), True),
             filter_silence_narration=_coerce_bool(
                 data.get("filter_silence_narration"), True
             ),
@@ -1549,6 +1559,13 @@ def load_gateway_config() -> GatewayConfig:
                 gw_data["write_sessions_json"] = yaml_cfg["write_sessions_json"]
             elif isinstance(gateway_section, dict) and "write_sessions_json" in gateway_section:
                 gw_data["write_sessions_json"] = gateway_section["write_sessions_json"]
+
+            # hosted_rooms_enabled: top-level wins; nested gateway.* fallback
+            # (matches the write_sessions_json precedence pattern).
+            if "hosted_rooms_enabled" in yaml_cfg:
+                gw_data["hosted_rooms_enabled"] = yaml_cfg["hosted_rooms_enabled"]
+            elif isinstance(gateway_section, dict) and "hosted_rooms_enabled" in gateway_section:
+                gw_data["hosted_rooms_enabled"] = gateway_section["hosted_rooms_enabled"]
 
             # Loop-liveness watchdog toggle + tuning knobs: top-level wins;
             # nested gateway.* fallback. GatewayConfig.from_dict has its own
@@ -2930,6 +2947,13 @@ def _apply_env_overrides(config: GatewayConfig) -> None:
     if relay_url_val:
         relay_config = _enable_from_env(Platform.RELAY)
         relay_config.extra["relay_url"] = relay_url_val.rstrip("/")
+
+    # Allow env override to disable the hosted rooms worker (opt-out for
+    # multi-profile installs that hit the concurrent-restart corruption
+    # issue #102120). Env var wins over config.yaml.
+    hosted_rooms_env = getenv("HERMES_GATEWAY_HOSTED_ROOMS_ENABLED", "")
+    if hosted_rooms_env:
+        config.hosted_rooms_enabled = is_truthy_value(hosted_rooms_env)
 
     # Relay-exclusive: a GATEWAY_RELAY_URL env stamp marks a connector-fronted
     # deployment where the connector owns every platform connection. Any

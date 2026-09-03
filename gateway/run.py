@@ -7677,6 +7677,17 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
         self._restart_detached = False
         self._restart_via_service = False
         self._detached_restart_helper_started = False
+
+    def _hosted_rooms_enabled(self) -> bool:
+        """Whether the Group Chat (hosted rooms) worker should be started.
+
+        Defaults to True. Can be disabled with ``gateway.hosted_rooms_enabled=false``
+        in config.yaml or ``HERMES_GATEWAY_HOSTED_ROOMS_ENABLED=false`` in env.
+        """
+        try:
+            return bool(cfg_get(self.config.gateway, "hosted_rooms_enabled", default=True))
+        except Exception:
+            return True  # fail-open: if config is malformed, keep the worker
         self._restart_command_source: Optional[SessionSource] = None
         # Monotonic-ish wall clock of when this GatewayRunner was constructed.
         # Used by the /restart redelivery guard to bound the window in which a
@@ -14639,18 +14650,34 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
         self._install_plugin_message_injector()
         self._update_runtime_status("running")
 
-        try:
-            await self._ensure_hosted_room_worker()
-        except Exception:
-            logger.error(
-                "Group Chat worker failed to start; mutating Group Chat commands "
-                "will fail closed until supervision recovers it",
-                exc_info=True,
+        # Group Chat (hosted rooms) worker: opt-out via config. The worker
+        # always points at the install-wide SHARED state.db
+        # (gateway.hosted_rooms.default_db_path), and on a multi-profile
+        # install every profile gateway starts one at boot — so a fleet
+        # restart that fires them back-to-back (e.g. `hermes update`) opens
+        # N concurrent writers on one file inside the same window and has
+        # corrupted the shared store in the field (#102120). Installs that
+        # don't use Group Chat can now disable the worker entirely;
+        # enabled-by-default preserves today's behavior for everyone else.
+        if not self._hosted_rooms_enabled():
+            logger.info(
+                "Group Chat worker disabled by config "
+                "(gateway.hosted_rooms_enabled=false); skipping shared "
+                "state.db worker"
             )
-        self._spawn_supervised(
-            self._hosted_room_worker_watcher,
-            "hosted_room_worker",
-        )
+        else:
+            try:
+                await self._ensure_hosted_room_worker()
+            except Exception:
+                logger.error(
+                    "Group Chat worker failed to start; mutating Group Chat commands "
+                    "will fail closed until supervision recovers it",
+                    exc_info=True,
+                )
+            self._spawn_supervised(
+                self._hosted_room_worker_watcher,
+                "hosted_room_worker",
+            )
 
         self._start_loop_heartbeat_task()
 

@@ -3307,6 +3307,15 @@ DEFAULT_CONFIG = {
         # producing ~/.hermes/sessions/sessions.json entirely.
         "write_sessions_json": True,
 
+        # Whether the gateway starts the Group Chat (hosted rooms) worker.
+        # The worker operates on the install-wide shared state.db and runs in
+        # every profile gateway by default. On multi-profile installs, a fleet
+        # restart (e.g. `hermes update`) fires all workers back-to-back on the
+        # same shared state.db, which has corrupted the store in the field
+        # (#102120). Set to false to disable the worker entirely — the gateway
+        # will still serve real messages, just without Group Chat rooms.
+        "hosted_rooms_enabled": True,
+
         # Scale-to-zero idle detection (Phase 0). The gateway watches for idle
         # and, when an instance is opted in via the NAS "Labs" toggle (carried as
         # the HERMES_SCALE_TO_ZERO env stamp) AND messaging is relay-only/absent
