@@ -43,21 +43,20 @@ def test_astral_uv_installer_not_spawned_via_bare_powershell(source: str):
 
 
 def test_astral_uv_installer_invoked_via_resolved_host_variable(source: str):
-    """The astral uv installer line must use the call operator on a variable.
+    """The astral uv installer must be invoked via the resolved host variable.
 
-    i.e. ``& $psHostExe -ExecutionPolicy ... irm https://astral.sh/uv...``
-    rather than naming a fixed executable.
+    The installer is downloaded to a temp file and executed with
+    ``& $psHostExe -File $installerPath`` rather than a bare ``powershell``.
     """
-    lines = [ln for ln in source.splitlines() if "astral.sh/uv/install.ps1 | iex" in ln]
-    # Exactly one invocation line carries the astral installer.
-    invocation = [ln for ln in lines if "irm https://astral.sh/uv/install.ps1 | iex" in ln]
-    assert invocation, "astral uv install invocation line not found"
-    for ln in invocation:
-        stripped = ln.strip()
-        assert stripped.startswith("& $"), (
-            f"astral uv installer must be invoked via the call operator on a "
-            f"resolved host variable (`& $...`), got: {stripped!r}"
-        )
+    # The astral installer URL must be present as a source.
+    assert "https://astral.sh/uv/$UvInstallerVersion/install.ps1" in source, (
+        "astral uv installer URL not found in source"
+    )
+    # The installer must be executed via the resolved host variable.
+    assert "& $psHostExe -ExecutionPolicy ByPass -File $installerPath" in source, (
+        "astral uv installer must be invoked via the call operator on the "
+        "resolved host variable (`& $psHostExe -File $installerPath`)"
+    )
 
 
 def test_powershell_host_resolver_is_defined_and_portable(source: str):
