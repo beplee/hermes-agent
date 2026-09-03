@@ -8036,7 +8036,7 @@ def _git_objects_foreign_owned_paths(project_root, limit: int = 5) -> list:
     try:
         if not hasattr(os, "geteuid"):
             return []
-        euid = os.geteuid()
+        euid = os.geteuid()  # windows-footgun: ok — guarded by hasattr above
         if euid == 0:
             return []
 
@@ -8110,7 +8110,7 @@ def _venv_foreign_owned_paths(venv_root, limit: int = 5) -> list:
     """
     try:
         if not hasattr(os, "geteuid"):
-            return []  # windows-footgun: ok — POSIX ownership concept only
+            return []
         euid = os.geteuid()  # windows-footgun: ok — guarded by hasattr above
         if euid == 0:
             return []  # root can rewrite anything; nothing to refuse
